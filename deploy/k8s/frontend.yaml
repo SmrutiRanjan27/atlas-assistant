@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: perplexity-frontend
+  namespace: perplexity-clone
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: perplexity-frontend
+  template:
+    metadata:
+      labels:
+        app: perplexity-frontend
+    spec:
+      containers:
+        - name: client
+          image: <ACR_LOGIN_SERVER>/perplexity-frontend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3000
+          env:
+            - name: PORT
+              value: "3000"
+            - name: NEXT_PUBLIC_ASSISTANT_API
+              value: "https://api.example.com"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 45
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: perplexity-frontend
+  namespace: perplexity-clone
+spec:
+  selector:
+    app: perplexity-frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: 3000
+  type: ClusterIP

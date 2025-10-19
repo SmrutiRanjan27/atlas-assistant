@@ -1,0 +1,10 @@
+fastapi
+langchain
+langchain_openai
+langchain_tavily
+python-dotenv
+requests
+psycopg[binary]
+asyncpg
+langgraph.checkpoint.postgres
+uvicorn

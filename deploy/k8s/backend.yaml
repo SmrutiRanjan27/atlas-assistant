@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: perplexity-backend
+  namespace: perplexity-clone
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: perplexity-backend
+  template:
+    metadata:
+      labels:
+        app: perplexity-backend
+    spec:
+      containers:
+        - name: server
+          image: <ACR_LOGIN_SERVER>/perplexity-backend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: perplexity-secrets
+                  key: DATABASE_URL
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: perplexity-secrets
+                  key: OPENAI_API_KEY
+            - name: TAVILY_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: perplexity-secrets
+                  key: TAVILY_API_KEY
+            - name: LANGCHAIN_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: perplexity-secrets
+                  key: LANGCHAIN_API_KEY
+            - name: DB_POOL_MIN_SIZE
+              valueFrom:
+                secretKeyRef:
+                  name: perplexity-secrets
+                  key: DB_POOL_MIN_SIZE
+            - name: DB_POOL_MAX_SIZE
+              valueFrom:
+                secretKeyRef:
+                  name: perplexity-secrets
+                  key: DB_POOL_MAX_SIZE
+          readinessProbe:
+            httpGet:
+              path: /conversations
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /conversations
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: perplexity-backend
+  namespace: perplexity-clone
+spec:
+  selector:
+    app: perplexity-backend
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+  type: ClusterIP

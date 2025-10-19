@@ -1,0 +1,38 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+/* Custom scrollbar styling to match Atlas theme */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #7c6cff rgba(16, 21, 42, 0.85);
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: rgba(16, 21, 42, 0.85);
+  border-radius: 9999px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #7c6cff 0%, #a997ff 100%);
+  border-radius: 9999px;
+  border: 2px solid rgba(16, 21, 42, 0.85);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #a997ff 0%, #7c6cff 100%);
+}

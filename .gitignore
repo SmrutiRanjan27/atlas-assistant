@@ -1,0 +1,6 @@
+.env
+.env.docker
+.venv/
+.next/
+node_modules/
+__pycache__/
