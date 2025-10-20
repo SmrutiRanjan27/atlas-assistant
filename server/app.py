@@ -1,282 +1,126 @@
+"""
+Refactored main server application with improved structure
+"""
+
 from __future__ import annotations
 
 from contextlib import AsyncExitStack, asynccontextmanager
-from datetime import timedelta
-from typing import Any, AsyncGenerator, List, Optional
-from uuid import UUID, uuid4
+from typing import Any, AsyncGenerator, Optional
 
 import asyncpg
-from fastapi import Depends, FastAPI, HTTPException, Response, status
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
 
 from search_agent.agent import compile_agent, create_async_postgres_checkpointer
 
 from core import (
-    ChatRequest,
-    ConversationCreateRequest,
-    ConversationDetail,
     ConversationRepository,
-    ConversationSummary,
     Settings,
-    Token,
-    User,
-    UserCreate,
-    UserLogin,
     UserRepository,
-    UserUpdate,
-    authenticate_user,
-    create_access_token,
-    get_current_user,
 )
-from core.auth import ACCESS_TOKEN_EXPIRE_MINUTES, security
-from services.chat import (
-    ChatService,
-    delete_conversation_state,
-    fetch_conversation_messages,
-)
+from dependencies import get_dependency_provider
+from routes import auth, chat, conversations
+from services.chat import ChatService
 
 
 @asynccontextmanager
 async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
+    """Application lifespan manager with proper dependency injection"""
     settings = Settings.load()
     resource_stack = AsyncExitStack()
     pool: Optional[asyncpg.Pool] = None
+    provider = get_dependency_provider()
 
     try:
+        # Initialize database connection pool
         pool = await asyncpg.create_pool(
             settings.database_url,
             min_size=settings.pool_min_size,
             max_size=settings.pool_max_size,
         )
+        
+        # Initialize repositories
         users = UserRepository(pool)
         await users.initialise()
+        
         conversations = ConversationRepository(pool, settings.default_title)
         await conversations.initialise()
 
+        # Initialize LangGraph components
         checkpointer = await resource_stack.enter_async_context(
             create_async_postgres_checkpointer(settings.database_url)
         )
         agent = compile_agent(checkpointer)
+        
+        # Initialize services
         chat_service = ChatService(agent, conversations)
 
-        application.state.settings = settings
+        # Set up dependency injection
+        provider.set_settings(settings)
+        provider.set_user_repository(users)
+        provider.set_conversation_repository(conversations)
+        provider.set_search_agent(agent)
+        provider.set_chat_service(chat_service)
+
+        # Store resource stack for cleanup
         application.state.resource_stack = resource_stack
         application.state.db_pool = pool
-        application.state.users = users
-        application.state.conversations = conversations
-        application.state.checkpointer = checkpointer
-        application.state.search_agent = agent
-        application.state.chat_service = chat_service
 
         yield
     finally:
-        if hasattr(application.state, "chat_service"):
-            application.state.chat_service = None
-        if hasattr(application.state, "search_agent"):
-            application.state.search_agent = None
-        if hasattr(application.state, "checkpointer"):
-            application.state.checkpointer = None
-        if hasattr(application.state, "conversations"):
-            application.state.conversations = None
-        if hasattr(application.state, "users"):
-            application.state.users = None
-        if hasattr(application.state, "db_pool"):
+        # Clean up dependencies
+        provider.set_chat_service(None)
+        provider.set_search_agent(None)
+        provider.set_conversation_repository(None)
+        provider.set_user_repository(None)
+        provider.set_settings(None)
+        
+        # Clean up application state
+        if hasattr(application.state, 'db_pool'):
             application.state.db_pool = None
-        if hasattr(application.state, "resource_stack"):
+        if hasattr(application.state, 'resource_stack'):
             application.state.resource_stack = None
-        if hasattr(application.state, "settings"):
-            application.state.settings = None
 
+        # Close database pool
         if pool is not None:
             try:
                 await pool.close()
             except Exception:
                 pass
 
+        # Close resource stack
         try:
             await resource_stack.aclose()
         except Exception:
             pass
 
 
-app = FastAPI(lifespan=lifespan)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["Content-Type"],
-)
-
-
-def _get_chat_service() -> ChatService:
-    service = getattr(app.state, "chat_service", None)
-    if service is None:
-        raise RuntimeError("Chat service is not initialised.")
-    return service
-
-
-def _get_conversation_repository() -> ConversationRepository:
-    repository = getattr(app.state, "conversations", None)
-    if repository is None:
-        raise RuntimeError("Conversation repository is not initialised.")
-    return repository
-
-
-def _get_user_repository() -> UserRepository:
-    repository = getattr(app.state, "users", None)
-    if repository is None:
-        raise RuntimeError("User repository is not initialised.")
-    return repository
-
-
-def _get_search_agent() -> Any:
-    agent = getattr(app.state, "search_agent", None)
-    if agent is None:
-        raise RuntimeError("Search agent is not initialised.")
-    return agent
-
-
-def _get_settings() -> Settings:
-    settings = getattr(app.state, "settings", None)
-    if settings is None:
-        raise RuntimeError("Application settings are not initialised.")
-    return settings
-
-
-async def get_current_user_dep(
-    credentials = Depends(security),
-    user_repo: UserRepository = Depends(_get_user_repository),
-) -> User:
-    return await get_current_user(credentials, user_repo)
-
-
-# Authentication endpoints
-@app.post("/auth/register", response_model=User, status_code=status.HTTP_201_CREATED)
-async def register(user_data: UserCreate) -> User:
-    user_repo = _get_user_repository()
-    user = await user_repo.create_user(user_data)
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username or email already exists"
-        )
-    return user
-
-
-@app.post("/auth/login", response_model=Token)
-async def login(user_credentials: UserLogin) -> Token:
-    user_repo = _get_user_repository()
-    user = await authenticate_user(user_repo, user_credentials.username, user_credentials.password)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": user.id}, expires_delta=access_token_expires
-    )
-    return Token(access_token=access_token, token_type="bearer")
-
-
-@app.get("/auth/me", response_model=User)
-async def get_current_user_info(current_user: User = Depends(get_current_user_dep)) -> User:
-    return current_user
-
-
-@app.put("/auth/profile", response_model=User)
-async def update_profile(
-    user_update: UserUpdate,
-    current_user: User = Depends(get_current_user_dep)
-) -> User:
-    user_repo = _get_user_repository()
-    updated_user = await user_repo.update_user(current_user.id, user_update)
-    if updated_user is None:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update user profile"
-        )
-    return updated_user
-
-
-@app.post("/chat/stream")
-async def stream_chat_responses(request: ChatRequest, current_user: User = Depends(get_current_user_dep)):
-    chat_service = _get_chat_service()
-
-    async def event_stream():
-        async for payload in chat_service.stream_responses(request.message, request.checkpoint_id):
-            yield f"{payload}\n"
-
-    return StreamingResponse(
-        event_stream(),
-        media_type="application/x-ndjson",
+def create_app() -> FastAPI:
+    """Create and configure the FastAPI application"""
+    app = FastAPI(
+        title="Perplexity Clone API",
+        description="A streaming chat interface powered by LangGraph",
+        version="1.0.0",
+        lifespan=lifespan
     )
 
-
-@app.post("/conversations", response_model=ConversationSummary, status_code=status.HTTP_201_CREATED)
-async def create_conversation(
-    request: ConversationCreateRequest,
-    current_user: User = Depends(get_current_user_dep)
-) -> ConversationSummary:
-    repository = _get_conversation_repository()
-    settings = _get_settings()
-    conversation_id = str(uuid4())
-    title = request.title.strip() if request.title else settings.default_title
-
-    await repository.ensure(conversation_id, current_user.id, title=title)
-    summary = await repository.get(conversation_id, current_user.id)
-    if summary is None:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create conversation.")
-    return summary
-
-
-@app.get("/conversations", response_model=List[ConversationSummary])
-async def list_conversations(current_user: User = Depends(get_current_user_dep)) -> List[ConversationSummary]:
-    repository = _get_conversation_repository()
-    return await repository.list(current_user.id)
-
-
-@app.get("/conversations/{conversation_id}", response_model=ConversationDetail)
-async def get_conversation(
-    conversation_id: UUID,
-    current_user: User = Depends(get_current_user_dep)
-) -> ConversationDetail:
-    repository = _get_conversation_repository()
-    agent = _get_search_agent()
-    conversation_id_str = str(conversation_id)
-
-    summary = await repository.get(conversation_id_str, current_user.id)
-    if summary is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found.")
-
-    messages = await fetch_conversation_messages(agent, conversation_id_str)
-    return ConversationDetail(
-        id=summary.id,
-        title=summary.title,
-        created_at=summary.created_at,
-        updated_at=summary.updated_at,
-        messages=messages,
+    # Add CORS middleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+        expose_headers=["Content-Type"],
     )
 
+    # Include route modules
+    app.include_router(auth.router)
+    app.include_router(chat.router)
+    app.include_router(conversations.router)
 
-@app.delete("/conversations/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_conversation(
-    conversation_id: UUID,
-    current_user: User = Depends(get_current_user_dep)
-) -> Response:
-    repository = _get_conversation_repository()
-    agent = _get_search_agent()
-    conversation_id_str = str(conversation_id)
+    return app
 
-    summary = await repository.get(conversation_id_str, current_user.id)
-    if summary is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found.")
 
-    await repository.delete(conversation_id_str, current_user.id)
-    await delete_conversation_state(agent, conversation_id_str)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+# Create the application instance
+app = create_app()

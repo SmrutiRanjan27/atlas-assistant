@@ -24,7 +24,7 @@ class ChatService:
         self._conversations = conversations
 
     async def stream_responses(
-        self, message: str, checkpoint_id: Optional[str] = None
+        self, message: str, user_id: str, checkpoint_id: Optional[str] = None
     ) -> AsyncGenerator[str, None]:
         conversations = self._conversations
         agent = self._agent
@@ -34,7 +34,7 @@ class ChatService:
             checkpoint_id = str(uuid4())
             new_conversation = True
 
-        await conversations.ensure(checkpoint_id)
+        await conversations.ensure(checkpoint_id, user_id)
 
         if new_conversation:
             yield self._encode(
