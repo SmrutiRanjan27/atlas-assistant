@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, List, Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 
 class ChatRequest(BaseModel):
@@ -33,3 +33,39 @@ class ConversationMessage(BaseModel):
 
 class ConversationDetail(ConversationSummary):
     messages: List[ConversationMessage]
+
+
+# User schemas
+class User(BaseModel):
+    id: str
+    username: str
+    email: str
+    name: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class UserCreate(BaseModel):
+    username: str
+    email: str
+    name: str
+    password: str = Field(..., min_length=1)
+
+
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
+
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    password: Optional[str] = Field(None, min_length=1)
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+
+class UserInDB(User):
+    hashed_password: str

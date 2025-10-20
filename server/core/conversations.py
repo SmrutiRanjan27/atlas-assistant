@@ -9,10 +9,14 @@ from .schemas import ConversationSummary
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS conversations (
     id UUID PRIMARY KEY,
+    user_id UUID NOT NULL,
     title TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
+
+CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id);
 """
 
 
@@ -29,14 +33,15 @@ class ConversationRepository:
         async with self._pool.acquire() as conn:
             await conn.execute(SCHEMA_SQL)
 
-    async def ensure(self, conversation_id: str, title: Optional[str] = None) -> None:
+    async def ensure(self, conversation_id: str, user_id: str, title: Optional[str] = None) -> None:
         async with self._pool.acquire() as conn:
             existing = await conn.fetchval("SELECT 1 FROM conversations WHERE id = $1", conversation_id)
             if existing:
                 return
             await conn.execute(
-                "INSERT INTO conversations (id, title) VALUES ($1, $2)",
+                "INSERT INTO conversations (id, user_id, title) VALUES ($1, $2, $3)",
                 conversation_id,
+                user_id,
                 title or self._default_title,
             )
 
@@ -62,14 +67,16 @@ class ConversationRepository:
                 conversation_id,
             )
 
-    async def list(self) -> List[ConversationSummary]:
+    async def list(self, user_id: str) -> List[ConversationSummary]:
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 """
                 SELECT id, title, created_at, updated_at
                 FROM conversations
+                WHERE user_id = $1
                 ORDER BY updated_at DESC
-                """
+                """,
+                user_id,
             )
         return [
             ConversationSummary(
@@ -81,12 +88,19 @@ class ConversationRepository:
             for row in rows
         ]
 
-    async def get(self, conversation_id: str) -> Optional[ConversationSummary]:
+    async def get(self, conversation_id: str, user_id: Optional[str] = None) -> Optional[ConversationSummary]:
         async with self._pool.acquire() as conn:
-            row = await conn.fetchrow(
-                "SELECT id, title, created_at, updated_at FROM conversations WHERE id = $1",
-                conversation_id,
-            )
+            if user_id:
+                row = await conn.fetchrow(
+                    "SELECT id, title, created_at, updated_at FROM conversations WHERE id = $1 AND user_id = $2",
+                    conversation_id,
+                    user_id,
+                )
+            else:
+                row = await conn.fetchrow(
+                    "SELECT id, title, created_at, updated_at FROM conversations WHERE id = $1",
+                    conversation_id,
+                )
         if not row:
             return None
         return ConversationSummary(
@@ -96,6 +110,9 @@ class ConversationRepository:
             updated_at=row["updated_at"],
         )
 
-    async def delete(self, conversation_id: str) -> None:
+    async def delete(self, conversation_id: str, user_id: Optional[str] = None) -> None:
         async with self._pool.acquire() as conn:
-            await conn.execute("DELETE FROM conversations WHERE id = $1", conversation_id)
+            if user_id:
+                await conn.execute("DELETE FROM conversations WHERE id = $1 AND user_id = $2", conversation_id, user_id)
+            else:
+                await conn.execute("DELETE FROM conversations WHERE id = $1", conversation_id)
