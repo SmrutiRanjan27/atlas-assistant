@@ -1,16 +1,6 @@
 import clsx from "clsx";
 import { useEffect, useRef, useState } from "react";
-
-export type ToolEvent = {
-  id: string;
-  toolName: string;
-  status: "running" | "completed" | "error";
-  headline?: string;
-  detail?: string;
-  links?: Array<{ title: string; url: string }>;
-  rawInput?: unknown;
-  rawOutput?: unknown;
-};
+import type { ToolEvent } from "../types";
 
 type ToolEventCardProps = {
   event: ToolEvent;

@@ -1,5 +1,7 @@
 "use client";
 
+import { UserProfile } from "./UserProfile";
+
 type ChatHeaderProps = {
   onOpenHistory: () => void;
   onStartNewConversation: () => void | Promise<void>;
@@ -31,6 +33,7 @@ export function ChatHeader({ onOpenHistory, onStartNewConversation, disableInter
         >
           New Chat
         </button>
+        <UserProfile />
       </div>
     </header>
   );

@@ -2,7 +2,7 @@
 
 import { MutableRefObject } from "react";
 
-import { ChatEntry } from "../hooks/useChatPage";
+import { ChatEntry } from "../types";
 import { ChatMessage } from "./ChatMessage";
 
 type ChatFeedProps = {

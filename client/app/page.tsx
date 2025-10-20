@@ -5,7 +5,8 @@ import { ChatFeed } from "../components/ChatFeed";
 import { ChatHeader } from "../components/ChatHeader";
 import { ChatHistoryPanel } from "../components/ChatHistoryPanel";
 import { ChatStatusIndicator } from "../components/ChatStatusIndicator";
-import { formatTimestamp, useChatPage } from "../hooks/useChatPage";
+import { ProtectedRoute } from "../components/ProtectedRoute";
+import { useChatPage } from "../hooks/useChatPage";
 
 export default function HomePage() {
   const {
@@ -26,10 +27,11 @@ export default function HomePage() {
     handleDeleteConversation,
     feedRef,
     disableInteractions,
+    formatTimestamp,
   } = useChatPage();
 
   return (
-    <>
+    <ProtectedRoute>
       <ChatHistoryPanel
         open={isHistoryOpen}
         conversations={conversations}
@@ -66,6 +68,6 @@ export default function HomePage() {
           />
         </section>
       </main>
-    </>
+    </ProtectedRoute>
   );
 }

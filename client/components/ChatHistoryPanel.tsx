@@ -2,7 +2,7 @@
 
 import clsx from "clsx";
 
-import { ConversationSummary } from "../hooks/useChatPage";
+import { ConversationSummary } from "../types";
 
 type ChatHistoryPanelProps = {
   open: boolean;

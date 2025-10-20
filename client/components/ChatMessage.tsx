@@ -1,6 +1,7 @@
 import clsx from "clsx";
 import { MarkdownContent } from "./MarkdownContent";
-import { ToolEvent, ToolEventCard } from "./ToolEventCard";
+import { ToolEventCard } from "./ToolEventCard";
+import { ToolEvent } from "../types";
 
 export type ChatMessageProps = {
   role: "user" | "assistant";
