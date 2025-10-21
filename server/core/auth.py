@@ -4,6 +4,11 @@ import os
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Optional
 
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
 import asyncpg
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
