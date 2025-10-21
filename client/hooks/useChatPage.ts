@@ -369,52 +369,22 @@ export function useChatPage(): UseChatPageReturn {
       return;
     }
 
+    // If current conversation is already empty, just clear it and close history
     if (activeConversationId && messages.length === 0) {
       setIsHistoryOpen(false);
       return;
     }
 
-    // Look for reusable empty conversation
-    let reusableId: string | null = null;
-    for (const id of emptyConversationIds) {
-      if (id === activeConversationId) {
-        continue;
-      }
-      const exists = conversations.some((item) => item.id === id);
-      if (exists) {
-        reusableId = id;
-        break;
-      }
-    }
-
-    if (reusableId) {
-      await selectConversationBase(reusableId);
-      setIsHistoryOpen(false);
-      return;
-    }
-
-    const summary = await createConversation();
-    setActiveConversationId(summary.id);
+    // Simply clear the current conversation without creating a database entry
+    // The conversation will be created when the user sends their first message
+    setActiveConversationId(null);
     setMessages([]);
-    setEmptyConversationIds((prev) => {
-      if (prev.has(summary.id)) {
-        return prev;
-      }
-      const next = new Set(prev);
-      next.add(summary.id);
-      return next;
-    });
     setIsHistoryOpen(false);
   }, [
     activeConversationId,
-    conversations,
-    createConversation,
-    emptyConversationIds,
     isStreaming,
     messages,
-    selectConversationBase,
     setActiveConversationId,
-    setEmptyConversationIds,
     setMessages,
   ]);
 
