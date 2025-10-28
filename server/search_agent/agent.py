@@ -57,8 +57,7 @@ async def chatbot(state: AgentState, config=None, store=None) -> AgentState:
         try:
             query = messages[-1].content if messages else ""
             # ✅ Correctly pass namespace and query
-            results = await store.asearch(("users", user_id, "memory"), query=query)
-            print(results)
+            results = await store.asearch(("users", user_id, "memory"), query=query, limit=2)
             recent_items = []
             for item in results or []:
                 value = getattr(item, "value", None) if item is not None else None
@@ -69,6 +68,7 @@ async def chatbot(state: AgentState, config=None, store=None) -> AgentState:
                     if isinstance(value, (dict, list)):
                         value = json.dumps(value, ensure_ascii=False)
                     recent_items.append(str(value))
+            print(recent_items)
 
             if recent_items:
                 summary_text = "\n".join(recent_items[:5])
@@ -84,14 +84,14 @@ async def chatbot(state: AgentState, config=None, store=None) -> AgentState:
     # 💾 Store the latest user-assistant exchange
     if store is not None and user_id:
         try:
-            user_ns = ("users", user_id, "memory")
+            thread_id = (config or {}).get("configurable", {}).get("thread_id")
 
             # find last user message
             last_user = next(
                 (m.content for m in reversed(messages) if isinstance(m, HumanMessage)),
                 None
             )
-            if last_user:
+            if last_user and thread_id:
                 assistant_text = getattr(result, "content", None)
                 if assistant_text:
                     exchange = {
@@ -101,8 +101,8 @@ async def chatbot(state: AgentState, config=None, store=None) -> AgentState:
                     }
                     key = f"exchange_{exchange['timestamp']}"
 
-                    # ✅ Store as proper JSON (not double-quoted string)
-                    await store.aput(user_ns, key, exchange)
+                    # ✅ Store under ("users", user_id, "memory", conversation_id)
+                    await store.aput(("users", user_id, "memory", thread_id), key, exchange)
         except Exception as e:
             print(f"[Warning] Memory write failed: {e}")
 

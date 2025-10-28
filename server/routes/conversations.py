@@ -21,7 +21,7 @@ from dependencies import (
     get_search_agent,
     get_settings,
 )
-from services.chat import delete_conversation_state, fetch_conversation_messages
+from services.chat import delete_conversation_state, delete_conversation_memories, fetch_conversation_messages
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
 
@@ -102,4 +102,5 @@ async def delete_conversation(
 
     await repository.delete(conversation_id_str, current_user.id)
     await delete_conversation_state(agent, conversation_id_str)
+    await delete_conversation_memories(agent, conversation_id_str, current_user.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

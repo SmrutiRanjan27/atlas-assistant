@@ -229,3 +229,47 @@ async def delete_conversation_state(agent: Any, conversation_id: str) -> None:
     except Exception:
         # Ignore checkpoint cleanup failures to avoid blocking API responses.
         return
+
+
+async def delete_conversation_memories(agent: Any, conversation_id: str, user_id: str) -> None:
+    """Best-effort removal of vector/kv memories scoped to this conversation.
+
+    We store per-conversation memories under the namespace ("users", user_id, "memory", conversation_id).
+    This attempts several likely deletion methods to support different store implementations.
+    """
+    if agent is None:
+        return
+    try:
+        store = getattr(agent, "store", None)
+        if not store:
+            return
+        ns = ("users", user_id, "memory", conversation_id)
+
+        # Try namespaced deletion helpers first
+        for method_name in ("adelete_namespace", "delete_namespace", "aclear_namespace", "clear_namespace"):
+            method = getattr(store, method_name, None)
+            if callable(method):
+                result = method(ns)
+                if inspect.isawaitable(result):
+                    await result
+                return
+
+        # Fallback: iterate known keys returned by search and delete one-by-one
+        search_method = getattr(store, "asearch", None) or getattr(store, "search", None)
+        delete_method = getattr(store, "adelete", None) or getattr(store, "delete", None)
+        if callable(search_method) and callable(delete_method):
+            try:
+                results = search_method(ns, query="", limit=1000)
+                if inspect.isawaitable(results):
+                    results = await results
+                for item in results or []:
+                    key = getattr(item, "key", None) or (item.get("key") if isinstance(item, dict) else None)
+                    if key:
+                        res = delete_method(ns, key)
+                        if inspect.isawaitable(res):
+                            await res
+            except Exception:
+                pass
+    except Exception:
+        # Ignore store cleanup failures to avoid blocking API responses.
+        return
