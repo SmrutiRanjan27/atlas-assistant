@@ -11,9 +11,9 @@ import asyncpg
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from search_agent.agent import compile_agent, create_async_postgres_checkpointer
+from search_agent.agent import compile_agent, create_async_postgres_checkpointer, create_async_postgres_store
 # To switch to in-memory checkpointer, import the following and update the block below:
-# from search_agent.agent import compile_agent, create_async_memory_checkpointer
+# from search_agent.agent import compile_agent, create_async_memory_checkpointer, create_async_memory_store
 
 from core import (
     ConversationRepository,
@@ -53,11 +53,14 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
         checkpointer = await resource_stack.enter_async_context(
             create_async_postgres_checkpointer(settings.database_url)
         )
+        store = await resource_stack.enter_async_context(
+            create_async_postgres_store(settings.database_url)
+        )
         # In-memory (non-persistent) checkpointer — uncomment to use instead:
         # checkpointer = await resource_stack.enter_async_context(
         #     create_async_memory_checkpointer()
         # )
-        agent = compile_agent(checkpointer)
+        agent = compile_agent(checkpointer, store)
         
         # Initialize services
         chat_service = ChatService(agent, conversations)

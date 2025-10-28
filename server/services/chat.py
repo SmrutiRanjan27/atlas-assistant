@@ -46,7 +46,7 @@ class ChatService:
 
         await conversations.maybe_update_title(checkpoint_id, message)
 
-        config = {"configurable": {"thread_id": checkpoint_id}}
+        config = {"configurable": {"thread_id": checkpoint_id, "user_id": user_id}}
         events = agent.astream_events(
             {"messages": [HumanMessage(content=message)]},
             config,
