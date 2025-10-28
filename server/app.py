@@ -12,6 +12,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from search_agent.agent import compile_agent, create_async_postgres_checkpointer
+# To switch to in-memory checkpointer, import the following and update the block below:
+# from search_agent.agent import compile_agent, create_async_memory_checkpointer
 
 from core import (
     ConversationRepository,
@@ -47,9 +49,14 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
         await conversations.initialise()
 
         # Initialize LangGraph components
+        # Postgres-backed persistent checkpointer (default)
         checkpointer = await resource_stack.enter_async_context(
             create_async_postgres_checkpointer(settings.database_url)
         )
+        # In-memory (non-persistent) checkpointer — uncomment to use instead:
+        # checkpointer = await resource_stack.enter_async_context(
+        #     create_async_memory_checkpointer()
+        # )
         agent = compile_agent(checkpointer)
         
         # Initialize services

@@ -82,3 +82,19 @@ async def create_async_postgres_checkpointer(conn_string: str):
     async with AsyncPostgresSaver.from_conn_string(conn_string) as saver:
         await saver.setup()
         yield saver
+
+
+@asynccontextmanager
+async def create_async_memory_checkpointer():
+    """Async context manager that yields an in-memory checkpointer.
+
+    This uses LangGraph's MemorySaver under the hood. It's non-persistent and
+    intended for local/dev usage or ephemeral sessions.
+    """
+    from langgraph.checkpoint.memory import InMemorySaver
+
+    saver = InMemorySaver()
+    try:
+        yield saver
+    finally:
+        pass
