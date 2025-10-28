@@ -9,6 +9,7 @@ from langchain_openai import ChatOpenAI
 from langchain_tavily import TavilySearch
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
+from langchain.embeddings import init_embeddings
 
 load_dotenv(override=True)
 
@@ -57,7 +58,7 @@ async def chatbot(state: AgentState, config=None, store=None) -> AgentState:
             query = messages[-1].content if messages else ""
             # ✅ Correctly pass namespace and query
             results = await store.asearch(("users", user_id, "memory"), query=query)
-
+            print(results)
             recent_items = []
             for item in results or []:
                 value = getattr(item, "value", None) if item is not None else None
@@ -147,7 +148,11 @@ async def create_async_postgres_checkpointer(conn_string: str):
 async def create_async_postgres_store(conn_string: str):
     from langgraph.store.postgres.aio import AsyncPostgresStore
 
-    async with AsyncPostgresStore.from_conn_string(conn_string) as store:
+    async with AsyncPostgresStore.from_conn_string(conn_string, index={
+        "dims": 1536,
+        "embed": init_embeddings("openai:text-embedding-3-small"),
+        "fields": ["user", "assistant"]
+    }) as store:
         await store.setup()
         yield store
 
