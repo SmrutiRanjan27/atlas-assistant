@@ -1,17 +1,25 @@
 import clsx from "clsx";
 import { useEffect, useRef, useState } from "react";
 import type { ToolEvent } from "../types";
+import { MarkdownContent } from "./MarkdownContent";
+
 
 type ToolEventCardProps = {
   event: ToolEvent;
 };
 
+
 export function ToolEventCard({ event }: ToolEventCardProps) {
   const statusLabel = event.status === "completed" ? "Done" : event.status === "error" ? "Error" : "Running";
-  const detailClasses = clsx(
-    "mt-2 whitespace-pre-wrap text-sm leading-relaxed",
-    event.status === "error" ? "text-atlas-danger" : "text-atlas-text-secondary",
+  const baseDetailMarkdownClass =
+    "mt-2 text-sm leading-relaxed prose-p:!my-2 prose-li:marker:text-atlas-accent prose-code:text-[0.85rem]";
+  const detailMarkdownClass = clsx(
+    baseDetailMarkdownClass,
+    event.status === "error"
+      ? "prose-p:!text-atlas-danger prose-strong:!text-atlas-danger"
+      : "prose-p:!text-atlas-text-secondary prose-strong:!text-atlas-accent-strong",
   );
+  const hasDetailSections = Boolean(event.detailSections && event.detailSections.length > 0);
   const [isCollapsed, setIsCollapsed] = useState(() => event.status === "completed");
   const previousStatusRef = useRef(event.status);
   useEffect(() => {
@@ -24,6 +32,7 @@ export function ToolEventCard({ event }: ToolEventCardProps) {
     setIsCollapsed((value) => !value);
   };
   const showBody = !isCollapsed;
+
 
   return (
     <div className="rounded-2xl border border-[rgba(124,108,255,0.25)] bg-[rgba(12,18,36,0.68)] px-4 py-4 text-atlas-text shadow-[0_12px_30px_rgba(8,12,28,0.25)]">
@@ -61,7 +70,39 @@ export function ToolEventCard({ event }: ToolEventCardProps) {
       </div>
       {showBody && (
         <>
-          {event.detail && <div className={detailClasses}>{event.detail}</div>}
+          {hasDetailSections && (
+            <div className="mt-3 space-y-3">
+              {event.detailSections!.map((section, index) => (
+                <div
+                  key={`${event.id}-section-${index}`}
+                  className="rounded-2xl border border-[rgba(124,108,255,0.32)] bg-gradient-to-br from-[rgba(18,26,56,0.85)] via-[rgba(12,18,40,0.85)] to-[rgba(28,36,78,0.65)] px-4 py-3 shadow-[0_10px_25px_rgba(6,10,26,0.35)] backdrop-blur-lg"
+                >
+                  {section.title && (
+                    <div className="text-[0.7rem] uppercase tracking-[0.22em] text-atlas-text-tertiary">
+                      {section.title}
+                    </div>
+                  )}
+                  {section.lines.length > 0 && (
+                    <MarkdownContent
+                      content={section.lines.join("\n\n")}
+                      className="mt-2 text-sm leading-relaxed prose-p:!my-2 prose-p:!text-atlas-text-secondary prose-strong:!text-atlas-accent-strong prose-li:marker:text-atlas-accent"
+                    />
+                  )}
+                  {section.footnote && (
+                    <div className="mt-3 rounded-xl border border-[rgba(124,108,255,0.25)] bg-[rgba(10,16,34,0.75)] px-3 py-2">
+                      <MarkdownContent
+                        content={section.footnote}
+                        className="text-xs prose-p:!my-1 prose-p:!text-atlas-text-tertiary"
+                      />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          {!hasDetailSections && event.detail && (
+            <MarkdownContent content={event.detail} className={detailMarkdownClass} />
+          )}
           {event.links && event.links.length > 0 && (
             <ul className="mt-3 space-y-2">
               {event.links.map((link) => (
@@ -82,10 +123,10 @@ export function ToolEventCard({ event }: ToolEventCardProps) {
           )}
           {event.status === "running" && !event.links && (
             <div className="mt-3 rounded-xl border border-dashed border-[rgba(124,108,255,0.25)] bg-[rgba(7,11,28,0.45)] px-4 py-3 text-xs text-atlas-text-secondary">
-              Gathering context…
+              Gathering context...
             </div>
           )}
-          {event.status === "error" && !event.detail && (
+          {event.status === "error" && !event.detail && !hasDetailSections && (
             <div className="mt-3 rounded-xl border border-[rgba(255,92,128,0.35)] bg-[rgba(44,9,24,0.45)] px-4 py-3 text-sm text-atlas-danger">
               Tool execution failed.
             </div>

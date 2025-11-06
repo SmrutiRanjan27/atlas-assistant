@@ -9,7 +9,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Perplexity Clone",
+  title: "Atlas Assistant",
   description: "A streaming chat interface powered by LangGraph.",
 };
 

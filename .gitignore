@@ -4,3 +4,5 @@
 .next/
 node_modules/
 __pycache__/
+.langgraph_api/
+data/

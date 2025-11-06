@@ -2,25 +2,27 @@
  * Refactored chat page hook with better separation of concerns
  */
 
+
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { useConversations } from './useConversations';
 import { useActiveConversation } from './useActiveConversation';
 import { ChatService } from '../services';
-import { 
-  generateId, 
-  createToolEvent, 
-  completeToolEvent, 
-  coerceJson, 
-  formatTimestamp 
+import {
+  generateId,
+  createToolEvent,
+  completeToolEvent,
+  coerceJson,
+  formatTimestamp
 } from '../utils/chat';
 import type { MessageEntry, ServerEvent, ToolEvent } from '../types';
+
 
 interface UseChatPageReturn {
   // Conversation management
   conversations: ReturnType<typeof useConversations>['conversations'];
   activeConversationId: string | null;
   messages: MessageEntry[];
-  
+ 
   // UI state
   input: string;
   setInput: (value: string) => void;
@@ -30,7 +32,7 @@ interface UseChatPageReturn {
   isHistoryOpen: boolean;
   disableInteractions: boolean;
   feedRef: React.RefObject<HTMLDivElement>;
-  
+ 
   // Actions
   submit: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   startNewConversation: () => Promise<void>;
@@ -38,10 +40,11 @@ interface UseChatPageReturn {
   handleDeleteConversation: (id: string) => Promise<void>;
   openHistory: () => void;
   closeHistory: () => void;
-  
+ 
   // Utilities
   formatTimestamp: typeof formatTimestamp;
 }
+
 
 /**
  * Main hook for chat page functionality
@@ -56,6 +59,7 @@ export function useChatPage(): UseChatPageReturn {
     refreshConversations,
   } = useConversations();
 
+
   const {
     activeConversationId,
     messages,
@@ -67,19 +71,22 @@ export function useChatPage(): UseChatPageReturn {
     setEmptyConversationIds,
   } = useActiveConversation();
 
+
   // Local state
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  
+ 
   // Refs
   const feedRef = useRef<HTMLDivElement | null>(null);
   const isStreamingRef = useRef(false);
+
 
   // Keep streaming ref in sync
   useEffect(() => {
     isStreamingRef.current = isStreaming;
   }, [isStreaming]);
+
 
   // Auto-scroll messages
   useEffect(() => {
@@ -90,6 +97,7 @@ export function useChatPage(): UseChatPageReturn {
       });
     }
   }, [messages]);
+
 
   /**
    * Ensure there's an active conversation, creating one if needed
@@ -110,6 +118,7 @@ export function useChatPage(): UseChatPageReturn {
     });
     return summary.id;
   }, [activeConversationId, createConversation, setActiveConversationId, setEmptyConversationIds]);
+
 
   /**
    * Handle server events during streaming
@@ -138,6 +147,7 @@ export function useChatPage(): UseChatPageReturn {
         return next;
       });
     };
+
 
     switch (payload.type) {
       case 'checkpoint': {
@@ -203,6 +213,9 @@ export function useChatPage(): UseChatPageReturn {
         break;
       }
       case 'tool_call': {
+        if (payload.tool_name === 'excel_query_tool') {
+          break;
+        }
         const toolInput = coerceJson(payload.input);
         const event = createToolEvent(payload.tool_name, toolInput);
         upsertAssistant((entry) => {
@@ -223,6 +236,9 @@ export function useChatPage(): UseChatPageReturn {
         break;
       }
       case 'tool_result': {
+        if (payload.tool_name === 'excel_query_tool') {
+          break;
+        }
         upsertAssistant((entry) => {
           const base = entry ?? ({
             id: assistantMessageId,
@@ -306,6 +322,7 @@ export function useChatPage(): UseChatPageReturn {
     }
   }, [refreshConversations, setActiveConversationId, setMessages]);
 
+
   /**
    * Submit a chat message
    */
@@ -315,6 +332,7 @@ export function useChatPage(): UseChatPageReturn {
     if (!value || isStreaming) {
       return;
     }
+
 
     const conversationId = await ensureActiveConversation();
     setEmptyConversationIds((prev) => {
@@ -326,8 +344,10 @@ export function useChatPage(): UseChatPageReturn {
       return next;
     });
 
+
     const userMessageId = generateId();
     const assistantMessageId = generateId();
+
 
     setMessages((prev) => [
       ...prev,
@@ -342,8 +362,10 @@ export function useChatPage(): UseChatPageReturn {
       },
     ]);
 
+
     setInput('');
     setIsStreaming(true);
+
 
     await ChatService.streamChatResponse(
       {
@@ -353,13 +375,14 @@ export function useChatPage(): UseChatPageReturn {
       (serverEvent) => handleEvent(assistantMessageId, serverEvent),
       (error) => {
         console.error('Chat streaming error:', error);
-        handleEvent(assistantMessageId, { 
-          type: 'error', 
-          message: error.message || 'Unexpected error' 
+        handleEvent(assistantMessageId, {
+          type: 'error',
+          message: error.message || 'Unexpected error'
         });
       }
     );
   }, [ensureActiveConversation, handleEvent, input, isStreaming, setEmptyConversationIds, setMessages]);
+
 
   /**
    * Start a new conversation
@@ -369,11 +392,13 @@ export function useChatPage(): UseChatPageReturn {
       return;
     }
 
+
     // If current conversation is already empty, just clear it and close history
     if (activeConversationId && messages.length === 0) {
       setIsHistoryOpen(false);
       return;
     }
+
 
     // Simply clear the current conversation without creating a database entry
     // The conversation will be created when the user sends their first message
@@ -388,6 +413,7 @@ export function useChatPage(): UseChatPageReturn {
     setMessages,
   ]);
 
+
   /**
    * Select a conversation and close history panel
    */
@@ -395,6 +421,7 @@ export function useChatPage(): UseChatPageReturn {
     await selectConversationBase(conversationId);
     setIsHistoryOpen(false);
   }, [selectConversationBase]);
+
 
   /**
    * Delete a conversation
@@ -412,16 +439,18 @@ export function useChatPage(): UseChatPageReturn {
       next.delete(conversationId);
       return next;
     });
-    
+   
     await deleteConversation(conversationId);
     if (wasActive) {
       await startNewConversation();
     }
   }, [activeConversationId, deleteConversation, isStreaming, setEmptyConversationIds, startNewConversation]);
 
+
   const disableInteractions = isStreaming || isLoadingConversation;
   const openHistory = useCallback(() => setIsHistoryOpen(true), []);
   const closeHistory = useCallback(() => setIsHistoryOpen(false), []);
+
 
   return {
     conversations,

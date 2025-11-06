@@ -7,7 +7,13 @@ requests
 psycopg[binary]
 asyncpg
 langgraph.checkpoint.postgres
+langgraph-cli[inmem]
 uvicorn
 python-jose[cryptography]
 passlib[argon2]
 python-multipart
+openpyxl
+langchain-text-splitters
+pypdf2
+pandas
+requests

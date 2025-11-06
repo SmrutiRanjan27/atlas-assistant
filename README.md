@@ -1,4 +1,4 @@
-# Perplexity Clone
+# Atlas Assistant
 
 A streaming chat interface powered by LangGraph with modern architecture and clean code structure.
 
